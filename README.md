@@ -1,4 +1,5 @@
 # CULPA on Vergil
+- link: https://chromewebstore.google.com/detail/culpa-on-vergil/flecppaemaaiflofgmiihjllkihbpeoh?authuser=3&hl=en
 
 Shows CULPA professor ratings directly on Columbia's Vergil course registration page. Available as a Chrome extension and a Safari extension.
 
