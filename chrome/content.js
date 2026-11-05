@@ -11,6 +11,16 @@
   const DEBOUNCE_MS = 250; // short: scans are cheap (attribute checks; network
   // only for genuinely new instructors) and dropdown recycling needs fast rescans
 
+  // "CULPA ?" (error) isn't final: retry with backoff 15s, 30s, 60s, 120s
+  const RETRY_ATTR = "data-culpa-retry-at";
+  const TRIES_ATTR = "data-culpa-tries";
+  const RETRY_BASE_MS = 15000;
+  const MAX_RETRIES = 4;
+
+  // Set once the extension is reloaded/updated under this tab: this script
+  // can no longer reach the service worker, so it stops working quietly
+  let orphaned = false;
+
   /* ── Nugget config ───────────────────────────────────── */
 
   const NUGGETS = {
@@ -24,17 +34,28 @@
 
   function lookup(name, uni, first, last) {
     return new Promise(resolve => {
+      // chrome.runtime.id disappears once the extension is reloaded/updated
+      if (orphaned || !chrome.runtime?.id) { goOrphaned(); return resolve({ error: true, orphaned: true }); }
       try {
         chrome.runtime.sendMessage({ type: "CULPA_LOOKUP", name, uni, first, last }, r => {
-          // Messaging failure (e.g. orphaned content script after an extension
-          // reload) is an error, NOT a "not found" — never show a false miss
-          if (chrome.runtime.lastError) resolve({ error: true });
-          else resolve(r?.result ?? null);
+          // Messaging failure is an error, NOT a "not found" — never show a false miss
+          if (chrome.runtime.lastError) {
+            if (!chrome.runtime?.id) { goOrphaned(); resolve({ error: true, orphaned: true }); }
+            else resolve({ error: true });
+          } else resolve(r?.result ?? null);
         });
       } catch (_) {
-        resolve({ error: true }); // "Extension context invalidated" throw
+        goOrphaned(); // "Extension context invalidated" throw
+        resolve({ error: true, orphaned: true });
       }
     });
+  }
+
+  function goOrphaned() {
+    if (orphaned) return;
+    orphaned = true;
+    observer.disconnect();
+    clearTimeout(timer);
   }
 
   function extractUni(raw) {
@@ -66,12 +87,40 @@
     return s;
   }
 
-  function makeErrorBadge() {
+  function makeErrorBadge(orphanedCtx) {
     const badge = document.createElement("span");
     badge.className = "culpa-badge culpa-error";
     badge.textContent = "CULPA ?";
-    badge.title = "Could not reach culpa.info";
+    badge.title = orphanedCtx
+      ? "CULPA on Vergil was updated. Reload this page."
+      : "Could not reach culpa.info. Retrying shortly.";
     return badge;
+  }
+
+  // An element is settled (skip it) when stamped for this instructor, unless
+  // it's an error whose retry time has come
+  function isSettled(el, key) {
+    if (!el.getAttribute(ATTR) || el.getAttribute(KEY_ATTR) !== key) return false;
+    if (el.getAttribute(ATTR) !== "error") return true;
+    return Date.now() < Number(el.getAttribute(RETRY_ATTR) || 0);
+  }
+
+  // Retry count carries over only while the element still shows the same instructor
+  function priorTries(el, key) {
+    return el.getAttribute(KEY_ATTR) === key ? Number(el.getAttribute(TRIES_ATTR) || 0) : 0;
+  }
+
+  function markError(el, prevTries, orphanedCtx) {
+    el.setAttribute(ATTR, "error");
+    const tries = prevTries + 1;
+    el.setAttribute(TRIES_ATTR, String(tries));
+    if (orphanedCtx || tries > MAX_RETRIES) {
+      el.setAttribute(RETRY_ATTR, "Infinity"); // give up
+      return;
+    }
+    const delay = RETRY_BASE_MS * 2 ** (tries - 1);
+    el.setAttribute(RETRY_ATTR, String(Date.now() + delay));
+    setTimeout(scheduleScan, delay + 50);
   }
 
   function makeNotFoundBadge() {
@@ -235,8 +284,7 @@
 
       // Skip only if the stamp belongs to THIS instructor (recycled elements
       // carry another instructor's stamp and must be re-processed)
-      if (wrapper.getAttribute(ATTR) &&
-          wrapper.getAttribute(KEY_ATTR) === culpaKey(wrapperUni(wrapper, raw), parsed.name)) return;
+      if (isSettled(wrapper, culpaKey(wrapperUni(wrapper, raw), parsed.name))) return;
 
       found.push({ wrapper, textEl });
     });
@@ -250,8 +298,7 @@
       const raw = textWithoutBadges(el);
       if (!/\([a-z]+\d+\)/i.test(raw)) return;
       // Re-process recycled mat-options whose text changed under our stamp
-      if (el.getAttribute(ATTR) &&
-          el.getAttribute(KEY_ATTR) === culpaKey(extractUni(raw), parseVergilName(raw).name)) return;
+      if (isSettled(el, culpaKey(extractUni(raw), parseVergilName(raw).name))) return;
       found.push(el);
     });
     return found;
@@ -264,7 +311,8 @@
     const uni = wrapperUni(el, raw);
     const { name, first, last } = parseVergilName(raw);
     const key = culpaKey(uni, name);
-    if (el.getAttribute(ATTR) && el.getAttribute(KEY_ATTR) === key) return;
+    if (isSettled(el, key)) return;
+    const prevTries = priorTries(el, key);
 
     el.setAttribute(ATTR, "pending");
     el.setAttribute(KEY_ATTR, key);
@@ -288,8 +336,8 @@
       return;
     }
     if (data.error) {
-      el.setAttribute(ATTR, "error");
-      insertRowBadge(el, makeErrorBadge(), key);
+      markError(el, prevTries, data.orphaned);
+      insertRowBadge(el, makeErrorBadge(data.orphaned), key);
       return;
     }
 
@@ -319,7 +367,8 @@
     const uni  = extractUni(raw);
     const { name, first, last } = parseVergilName(raw);
     const key  = culpaKey(uni, name);
-    if (el.getAttribute(ATTR) && el.getAttribute(KEY_ATTR) === key) return;
+    if (isSettled(el, key)) return;
+    const prevTries = priorTries(el, key);
 
     el.setAttribute(ATTR, "pending");
     el.setAttribute(KEY_ATTR, key);
@@ -337,8 +386,8 @@
       return;
     }
     if (data.error) {
-      el.setAttribute(ATTR, "error");
-      el.appendChild(makeErrorBadge());
+      markError(el, prevTries, data.orphaned);
+      el.appendChild(makeErrorBadge(data.orphaned));
       return;
     }
 
@@ -362,10 +411,12 @@
 
   // Watch for SPA navigation & dynamic content
   let timer;
-  const observer = new MutationObserver(() => {
+  function scheduleScan() {
+    if (orphaned) return;
     clearTimeout(timer);
     timer = setTimeout(scan, DEBOUNCE_MS);
-  });
+  }
+  const observer = new MutationObserver(scheduleScan);
   observer.observe(document.body, { childList: true, subtree: true });
 
 })();
