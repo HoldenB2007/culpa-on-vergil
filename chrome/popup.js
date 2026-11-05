@@ -1,3 +1,9 @@
+// One-time install note: show it, then switch back to the plain popup for good
+if (new URLSearchParams(location.search).has("welcome")) {
+  document.getElementById("welcome").hidden = false;
+  chrome.action.setPopup({ popup: "popup.html" });
+}
+
 // Status check
 chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
   const url = tabs[0]?.url || "";

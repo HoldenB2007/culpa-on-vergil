@@ -195,6 +195,22 @@ async function lookupProfessor(name, uni, first, last) {
   return result;
 }
 
+/* ── First-install onboarding ───────────────────────────── */
+
+// Fresh install only (not updates/reloads): pop the normal popup open once
+// with a one-time "pin me" note. popup.js resets to the plain popup the first
+// time it's shown, so the note never appears again.
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== chrome.runtime.OnInstalledReason.INSTALL) return;
+  await chrome.action.setPopup({ popup: "popup.html?welcome=1" });
+  try {
+    await chrome.action.openPopup(); // Chrome 127+; anchors to the toolbar
+  } catch (_) {
+    // Couldn't auto-open (older Chrome / no focused window) — the note will
+    // show the first time the user opens the popup themselves instead
+  }
+});
+
 /* ── Message handler ────────────────────────────────────── */
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
