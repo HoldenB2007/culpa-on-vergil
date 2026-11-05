@@ -1,3 +1,6 @@
+// Version label always matches the manifest
+document.getElementById("version").textContent = "v" + chrome.runtime.getManifest().version;
+
 // One-time install note: show it, then switch back to the plain popup for good
 if (new URLSearchParams(location.search).has("welcome")) {
   document.getElementById("welcome").hidden = false;
