@@ -106,7 +106,20 @@
 
   /* ── Badge creation ──────────────────────────────────── */
 
-  function makeBadge(data) {
+  // CULPA API data is third-party: escape it before it touches innerHTML,
+  // or a crafted professor name would run script inside Vergil
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function makeBadge(raw) {
+    const data = {
+      ...raw,
+      avgRating:   Number.isFinite(Number(raw.avgRating)) && raw.avgRating != null ? Number(raw.avgRating) : null,
+      reviewCount: Number(raw.reviewCount) || 0,
+    };
+
     const badge = document.createElement("a");
     badge.className = "culpa-badge";
     badge.href = data.culpaUrl;
@@ -133,7 +146,7 @@
     if (data.reviewCount > 0) {
       let tipHTML = `
         <div class="culpa-tip-header">
-          <strong>${data.firstName} ${data.lastName}</strong>
+          <strong>${esc(data.firstName)} ${esc(data.lastName)}</strong>
           ${nug.emoji ? `<span class="culpa-tip-nugget">${nug.emoji} ${nug.label}</span>` : ""}
         </div>
         ${data.avgRating != null ? `<div class="culpa-tip-rating"><span class="culpa-tip-rating-num">${data.avgRating.toFixed(1)}</span><span class="culpa-tip-rating-max"> / 5</span></div>` : ""}
