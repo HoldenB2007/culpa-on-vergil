@@ -7,6 +7,7 @@
   const KEY_ATTR = "data-culpa-key"; // which instructor the stamp belongs to —
   // Angular recycles elements (swaps text, keeps the node), so a bare ATTR
   // check would leave another instructor's badge on the reused element
+  const FOR_ATTR = "data-culpa-for"; // on row badges: key of their wrapper
   const DEBOUNCE_MS = 250; // short: scans are cheap (attribute checks; network
   // only for genuinely new instructors) and dropdown recycling needs fast rescans
 
@@ -283,23 +284,34 @@
     if (el.getAttribute(KEY_ATTR) !== key) return;
     if (!data) {
       el.setAttribute(ATTR, "miss");
-      const nf = makeNotFoundBadge();
-      nf.classList.add("culpa-badge-row");
-      el.insertAdjacentElement("afterend", nf);
+      insertRowBadge(el, makeNotFoundBadge(), key);
       return;
     }
     if (data.error) {
       el.setAttribute(ATTR, "error");
-      const err = makeErrorBadge();
-      err.classList.add("culpa-badge-row");
-      el.insertAdjacentElement("afterend", err);
+      insertRowBadge(el, makeErrorBadge(), key);
       return;
     }
 
     el.setAttribute(ATTR, "done");
-    const badge = makeBadge(data);
+    insertRowBadge(el, makeBadge(data), key);
+  }
+
+  // Row badges live OUTSIDE Angular's wrapper (as its next sibling), so
+  // Angular never cleans them up. Tag each with the instructor it belongs to…
+  function insertRowBadge(el, badge, key) {
     badge.classList.add("culpa-badge-row");
+    badge.setAttribute(FOR_ATTR, key);
     el.insertAdjacentElement("afterend", badge);
+  }
+
+  // …and on every scan drop any whose wrapper is gone, re-rendered, or now
+  // shows someone else — otherwise a stale badge sits under the wrong name
+  function sweepOrphanBadges() {
+    document.querySelectorAll(".culpa-badge-row").forEach(b => {
+      const prev = b.previousElementSibling;
+      if (!prev || prev.getAttribute(KEY_ATTR) !== b.getAttribute(FOR_ATTR)) b.remove();
+    });
   }
 
   async function processDropdownElement(el) {
@@ -338,6 +350,7 @@
   /* ── Main scan loop ──────────────────────────────────── */
 
   async function scan() {
+    sweepOrphanBadges();
     await Promise.allSettled([
       ...findInstructorElements().map(el => processElement(el)),
       ...findDropdownElements().map(el => processDropdownElement(el)),
