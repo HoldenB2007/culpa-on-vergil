@@ -64,26 +64,34 @@ async function searchProfessor(first, last, uni) {
 
   // 0. UNI match — exact and unambiguous, but CULPA's uni field is only
   //    partially populated, so the name tiers below remain as fallback
-  if (uni) {
-    const ul = uni.toLowerCase();
+  const ul = uni ? uni.toLowerCase() : null;
+  if (ul) {
     const uniMatch = results.find(item =>
       item.professor_header.uni?.toLowerCase() === ul
     );
     if (uniMatch) return uniMatch.professor_header;
   }
 
+  // A candidate whose CULPA uni is set and differs from Vergil's is a
+  // different person, however well the name matches — drop it
+  const pool = results.filter(item => {
+    const pu = item.professor_header.uni?.toLowerCase();
+    return !(ul && pu && pu !== ul);
+  });
+
   // 1. Exact match (full first name + last name)
-  let match = results.find(item => {
+  let match = pool.find(item => {
     const ph = item.professor_header;
     return normFirst(ph.first_name) === fl &&
            normLast(ph.last_name)   === ll;
   });
 
   // 2. Partial first-name match — handles CULPA/Vergil storing different lengths
-  //    e.g. Vergil "Mary Ann", CULPA "Mary" or vice versa
+  //    e.g. Vergil "Mary Ann", CULPA "Mary" or vice versa. Only when
+  //    unambiguous ("Mary" vs CULPA "Mary Ann" + "Mary Beth" → no match)
   if (!match) {
     const flFirst = fl.split(" ")[0];
-    match = results.find(item => {
+    const cands = pool.filter(item => {
       const ph = item.professor_header;
       const phFirst = normFirst(ph.first_name);
       return normLast(ph.last_name) === ll &&
@@ -91,6 +99,7 @@ async function searchProfessor(first, last, uni) {
               phFirst.startsWith(flFirst + " ") ||
               fl.startsWith(phFirst + " "));
     });
+    if (cands.length === 1) match = cands[0];
   }
 
   // 2.5 Nickname / short-form first name — e.g. Vergil "Chris Murphy", CULPA
@@ -100,7 +109,7 @@ async function searchProfessor(first, last, uni) {
   if (!match) {
     const flFirst = fl.split(" ")[0];
     const flAlts  = NICKNAMES[flFirst] || [];
-    const cands = results.filter(item => {
+    const cands = pool.filter(item => {
       const ph = item.professor_header;
       if (normLast(ph.last_name) !== ll) return false;
       const phFirst = normFirst(ph.first_name).split(" ")[0];
@@ -114,12 +123,17 @@ async function searchProfessor(first, last, uni) {
     if (cands.length === 1) match = cands[0];
   }
 
-  // 3. Last-name-only — only when unambiguous (exactly 1 result with that last name)
+  // 3. Last name + first initial — only when unambiguous (exactly 1 result
+  //    with that last name) and the first initial agrees, so a new lecturer
+  //    "Sarah Klein" never inherits CULPA's only "Robert Klein"
   if (!match) {
-    const lastMatches = results.filter(item =>
+    const lastMatches = pool.filter(item =>
       normLast(item.professor_header.last_name) === ll
     );
-    if (lastMatches.length === 1) match = lastMatches[0];
+    if (lastMatches.length === 1 &&
+        normFirst(lastMatches[0].professor_header.first_name)[0] === fl[0]) {
+      match = lastMatches[0];
+    }
   }
 
   return match?.professor_header || null;
@@ -161,8 +175,9 @@ async function lookupCulpa(first, last, uni) {
 /* ── Main lookup (with cache) ────────────────────────────── */
 
 async function lookupProfessor(name, uni, first, last) {
-  // "culpa2:" — v2 prefix invalidates pre-UNI-matching cache entries
-  const key = uni ? `culpa2:uni:${uni}` : `culpa2:${name.toLowerCase().trim()}`;
+  // "culpa3:" — bumped whenever matching changes, so entries matched by
+  // older, looser rules are ignored
+  const key = uni ? `culpa3:uni:${uni}` : `culpa3:${name.toLowerCase().trim()}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
 
