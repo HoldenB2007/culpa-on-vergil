@@ -14,7 +14,7 @@
     }
 
     .header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-    .logo { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+    .logo { width: 48px; height: 48px; border-radius: 4px; object-fit: cover; }
     .title    { font-size: 16px; font-weight: 700; color: #fff; }
     .subtitle { font-size: 11px; color: #555; margin-top: 1px; }
 
@@ -22,7 +22,7 @@
 
     .status {
       display: flex; align-items: center; gap: 8px;
-      padding: 9px 12px; border-radius: 6px;
+      padding: 9px 12px; border-radius: 3px;
       font-size: 12px; font-weight: 500; margin-bottom: 14px;
     }
     .status.active   { background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.2); color: #81c784; }
@@ -33,12 +33,12 @@
 
     .legend-title { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
     .nuggets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-    .nug { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.025); }
+    .nug { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 3px; background: rgba(255,255,255,0.025); }
     .nug .e { font-size: 22px; line-height: 1; }
 
     .actions { display: flex; gap: 8px; margin-bottom: 10px; }
     .actions a, .actions button {
-      flex: 1; text-align: center; padding: 8px; border-radius: 6px;
+      flex: 1; text-align: center; padding: 8px; border-radius: 4px;
       font-size: 11px; font-weight: 600; text-decoration: none; border: none; cursor: pointer;
       transition: background 0.15s;
     }
@@ -48,15 +48,16 @@
     .actions .secondary:hover { background: rgba(255,255,255,0.07); }
 
     .clear-btn {
-      width: 100%; padding: 7px; border-radius: 6px;
-      background: rgba(255,255,255,0.03); color: #666;
-      font-size: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.06);
+      width: 100%; padding: 8px; border-radius: 4px;
+      background: rgba(255,255,255,0.06); color: #bbb;
+      font-family: inherit; font-size: 11px; font-weight: 600; text-align: center;
+      border: 1px solid rgba(255,255,255,0.15);
       cursor: pointer; transition: all 0.15s;
     }
-    .clear-btn:hover { background: rgba(255,80,80,0.08); color: #e57373; border-color: rgba(255,80,80,0.2); }
+    .clear-btn:hover { background: rgba(255,80,80,0.1); color: #e57373; border-color: rgba(255,80,80,0.35); }
 
     .welcome {
-      padding: 10px 12px; border-radius: 6px; margin-bottom: 14px;
+      padding: 10px 12px; border-radius: 3px; margin-bottom: 14px;
       background: rgba(117,179,240,0.08); border: 1px solid rgba(117,179,240,0.25);
       font-size: 12px; line-height: 1.5; color: #aaa;
     }
@@ -72,12 +73,12 @@
     <img class="logo" src="icons/icon128.png" alt="logo">
     <div>
       <div class="title">CULPA on Vergil</div>
-      <div class="subtitle">v1.2.0</div>
+      <div class="subtitle">v1.4.1</div>
     </div>
   </div>
 
   <div class="welcome" id="welcome" hidden>
-    <b>📌 Pin me for quick access</b><br>
+    <b>PIN ME</b><br>
     Click the puzzle piece
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/></svg>
     in the toolbar, then the pin next to CULPA on Vergil. Ratings appear on Vergil automatically.
