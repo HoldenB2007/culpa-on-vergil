@@ -416,7 +416,18 @@
     clearTimeout(timer);
     timer = setTimeout(scan, DEBOUNCE_MS);
   }
-  const observer = new MutationObserver(scheduleScan);
+  // Our own DOM writes (badge insert/remove, tooltip content on every hover)
+  // would otherwise trigger a full rescan each time
+  function isOwnMutation(m) {
+    if (m.target === tooltip || tooltip.contains(m.target)) return true;
+    const nodes = [...m.addedNodes, ...m.removedNodes];
+    return nodes.length > 0 &&
+           nodes.every(n => n.nodeType === Node.ELEMENT_NODE && n.classList.contains("culpa-badge"));
+  }
+  const observer = new MutationObserver(muts => {
+    if (muts.every(isOwnMutation)) return;
+    scheduleScan();
+  });
   observer.observe(document.body, { childList: true, subtree: true });
 
 })();
