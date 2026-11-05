@@ -3,7 +3,7 @@
   "name": "CULPA on Vergil",
   "version": "1.4.1",
   "description": "See CULPA professor ratings directly on Columbia's Vergil course registration page.",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["storage"],
   "host_permissions": [
     "https://vergil.columbia.edu/*",
     "https://vergil.registrar.columbia.edu/*",

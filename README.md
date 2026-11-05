@@ -92,7 +92,7 @@ culpa-vergil-extension/
 
 Runs on Vergil pages. Uses a **MutationObserver** to handle Vergil's Angular SPA navigation.
 
-Two scanners run on every DOM change (debounced 600ms):
+Two scanners run on every DOM change (debounced 250ms; the extension's own badge/tooltip mutations are ignored):
 
 | Scanner | Selector | Name format |
 |---------|----------|-------------|
@@ -112,11 +112,14 @@ Receives `CULPA_LOOKUP` messages from the content script.
 1. `GET /api/professor/search?queryString={First Last}&maxResults=20`
    - Returns array of `{ professor_header: { professor_id, first_name, last_name, nugget, uni } }`
    - Nugget values: `0=None`, `1=Bronze`, `2=Silver`, `3=Gold`
-   - Match priority: UNI (exact, when CULPA has it) → exact name → partial first-name → unambiguous nickname/short-form (Chris→Christian, Mike→Michael) → unambiguous last-name-only → no badge (`not found`); never guesses
+   - Match priority: UNI (exact, when CULPA has it) → exact name → unambiguous partial first-name → unambiguous nickname/short-form (Chris→Christian, Mike→Michael) → unambiguous last name with matching first initial → no badge (`not found`); never guesses
+   - Candidates whose CULPA UNI is set and differs from Vergil's are always rejected
 2. `GET /api/professor_page/card/{professor_id}`
    - Returns `professor_summary.avg_rating` and `professor_summary.num_reviews`
 
-Results cached in `chrome.storage.local` for 24 hours. Clear from the extension popup.
+Results cached in `chrome.storage.local`: found professors for 24 hours, "not found" for 6 hours. Network/API errors are never cached; the badge shows `CULPA ?` and retries with backoff. Concurrent lookups for the same professor share one request. Clear from the extension popup.
+
+On first install the toolbar popup opens once with a short "PIN ME" note; it never appears again.
 
 ### culpa.info API (discovered from SPA JS bundle)
 
@@ -158,7 +161,7 @@ If badges stop appearing:
 | Badge appearance | `content.css` — `.culpa-badge`, `.culpa-gold/silver/bronze` |
 | Tooltip size/style | `content.css` — `.culpa-tooltip` and `.culpa-tip-*` |
 | Cache duration | `background.js` — `CACHE_TTL` (default 24h) |
-| Scan debounce | `content.js` — `DEBOUNCE_MS` (default 600ms) |
+| Scan debounce | `content.js` — `DEBOUNCE_MS` (default 250ms) |
 | Popup content | `popup.html` + `popup.js` |
 
 
