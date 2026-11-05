@@ -125,16 +125,15 @@ async function searchProfessor(first, last, uni) {
   return match?.professor_header || null;
 }
 
+// Throws on network/HTTP/parse failure so the caller reports an error
+// (not cached, retried later) instead of caching a bogus "0 reviews"
 async function getProfessorCard(professorId) {
-  try {
-    const url = `${CULPA_BASE}/api/professor_page/card/${professorId}`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j.professor_summary || null;
-  } catch (_) {
-    return null;
-  }
+  const url = `${CULPA_BASE}/api/professor_page/card/${professorId}`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+  if (!r.ok) { console.error("[CULPA] card HTTP", r.status, url); throw new Error(`HTTP ${r.status}`); }
+  const j = await r.json();
+  // A card with no summary is a real (empty) professor page, not a failure
+  return j?.professor_summary || {};
 }
 
 async function lookupCulpa(first, last, uni) {
@@ -143,8 +142,8 @@ async function lookupCulpa(first, last, uni) {
 
   const card      = await getProfessorCard(prof.professor_id);
   const nuggetNum = prof.nugget ?? 0;
-  const avgRating = card?.avg_rating ? Math.round(card.avg_rating * 10) / 10 : null;
-  const reviewCount = card?.num_reviews || 0;
+  const avgRating = card.avg_rating ? Math.round(card.avg_rating * 10) / 10 : null;
+  const reviewCount = card.num_reviews || 0;
 
   return {
     id:          prof.professor_id,
