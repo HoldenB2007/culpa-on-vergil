@@ -2,7 +2,9 @@
 // Uses the live culpa.info internal API (discovered from the SPA bundle).
 
 const CULPA_BASE = "https://culpa.info";
-const CACHE_TTL  = 1000 * 60 * 60 * 24; // 24 h
+const CACHE_TTL  = 1000 * 60 * 60 * 24; // 24 h — found professors
+const MISS_TTL   = 1000 * 60 * 60 * 6;  // 6 h — "not found" (new faculty get added)
+const CACHE_PREFIX = "culpa3:";          // bump when matching rules change
 
 // Nugget values from culpa.info source: 0=None, 1=Bronze, 2=Silver, 3=Gold
 const NUGGET_LABEL = { 0: "None", 1: "Bronze", 2: "Silver", 3: "Gold" };
@@ -30,7 +32,8 @@ async function cacheGet(key) {
   return new Promise(resolve => {
     chrome.storage.local.get(key, r => {
       const e = r[key];
-      resolve(e && Date.now() - e.ts < CACHE_TTL ? e.data : null);
+      const ttl = e?.data?.notFound ? MISS_TTL : CACHE_TTL;
+      resolve(e && Date.now() - e.ts < ttl ? e.data : null);
     });
   });
 }
@@ -38,6 +41,17 @@ async function cacheGet(key) {
 async function cacheSet(key, data) {
   return new Promise(resolve => {
     chrome.storage.local.set({ [key]: { data, ts: Date.now() } }, resolve);
+  });
+}
+
+// Remove only our cache entries ("culpa…" keys), never other stored state
+function removeCacheKeys(filter = () => true) {
+  return new Promise(resolve => {
+    chrome.storage.local.get(null, all => {
+      const keys = Object.keys(all).filter(k => k.startsWith("culpa") && filter(k));
+      if (!keys.length) return resolve();
+      chrome.storage.local.remove(keys, resolve);
+    });
   });
 }
 
@@ -174,12 +188,22 @@ async function lookupCulpa(first, last, uni) {
 
 /* ── Main lookup (with cache) ────────────────────────────── */
 
-async function lookupProfessor(name, uni, first, last) {
-  // "culpa3:" — bumped whenever matching changes, so entries matched by
-  // older, looser rules are ignored
-  const key = uni ? `culpa3:uni:${uni}` : `culpa3:${name.toLowerCase().trim()}`;
+// In-flight lookups by cache key: a professor teaching 10 sections on one
+// page triggers one API round trip, not 10
+const inflight = new Map();
+
+function lookupProfessor(name, uni, first, last) {
+  const key = uni ? `${CACHE_PREFIX}uni:${uni}` : `${CACHE_PREFIX}${name.toLowerCase().trim()}`;
+  if (!inflight.has(key)) {
+    inflight.set(key, doLookup(key, name, uni, first, last)
+      .finally(() => inflight.delete(key)));
+  }
+  return inflight.get(key);
+}
+
+async function doLookup(key, name, uni, first, last) {
   const cached = await cacheGet(key);
-  if (cached) return cached;
+  if (cached) return cached.notFound ? null : cached;
 
   // Content script sends an explicit first/last split when Vergil's
   // "Last, First" comma form made it unambiguous (multi-word last names
@@ -205,6 +229,7 @@ async function lookupProfessor(name, uni, first, last) {
     await cacheSet(key, result);
   } else {
     console.log("[CULPA] no match:", JSON.stringify({ name, uni, first, last }));
+    await cacheSet(key, { notFound: true }); // shorter MISS_TTL applies
   }
   return result;
 }
@@ -215,6 +240,10 @@ async function lookupProfessor(name, uni, first, last) {
 // with a one-time "pin me" note. popup.js resets to the plain popup the first
 // time it's shown, so the note never appears again.
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason === chrome.runtime.OnInstalledReason.UPDATE) {
+    removeCacheKeys(k => !k.startsWith(CACHE_PREFIX)); // old-prefix leftovers
+    return;
+  }
   if (reason !== chrome.runtime.OnInstalledReason.INSTALL) return;
   await chrome.action.setPopup({ popup: "popup.html?welcome=1" });
   try {
@@ -233,7 +262,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg.type === "CULPA_CLEAR_CACHE") {
-    chrome.storage.local.clear(() => sendResponse({ ok: true }));
+    removeCacheKeys().then(() => sendResponse({ ok: true }));
     return true;
   }
 });
